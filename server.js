@@ -30,30 +30,61 @@ function findFirstHtmlInZip(zipBuffer) {
   return htmlEntry.getData().toString('utf8');
 }
 
-app.post('/convert', upload.single('zipFile'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Lütfen bir ZIP dosyası yükleyin.' });
+function sanitizeFileName(name) {
+  return name
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function stripHtmlTags(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function deriveInvoiceName(htmlContent, originalFileName, index) {
+  const fileBase = path.parse(originalFileName).name;
+
+  const titleMatch = htmlContent.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (titleMatch && titleMatch[1]) {
+    const cleaned = sanitizeFileName(stripHtmlTags(titleMatch[1]));
+    if (cleaned) {
+      return cleaned;
+    }
   }
 
-  let htmlContent;
+  const h1Match = htmlContent.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  if (h1Match && h1Match[1]) {
+    const cleaned = sanitizeFileName(stripHtmlTags(h1Match[1]));
+    if (cleaned) {
+      return cleaned;
+    }
+  }
+
+  const plainText = stripHtmlTags(htmlContent);
+  const buildingMatch = plainText.match(/([A-ZÇĞİÖŞÜ0-9][A-ZÇĞİÖŞÜ0-9 .'-]{2,80}?(SİTESİ|SITE|SİTE|BİNASI|BINASI|BINA|BİNA))/i);
+  if (buildingMatch && buildingMatch[1]) {
+    const cleaned = sanitizeFileName(buildingMatch[1]);
+    if (cleaned) {
+      return cleaned;
+    }
+  }
+
+  return sanitizeFileName(fileBase) || `fatura-${index + 1}`;
+}
+
+async function convertHtmlToPdfBuffer(browser, htmlContent) {
+  const page = await browser.newPage();
   try {
-    htmlContent = findFirstHtmlInZip(req.file.buffer);
-  } catch (error) {
-    return res.status(400).json({ error: 'Geçersiz ZIP dosyası.' });
-  }
-
-  if (!htmlContent) {
-    return res.status(400).json({ error: 'ZIP içinde HTML dosyası bulunamadı.' });
-  }
-
-  let browser;
-  try {
-    browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
-
     await page.setContent(htmlContent, { waitUntil: 'networkidle' });
 
-    const pdfBuffer = await page.pdf({
+    return await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: {
@@ -63,13 +94,60 @@ app.post('/convert', upload.single('zipFile'), async (req, res) => {
         left: '15mm'
       }
     });
+  } finally {
+    await page.close();
+  }
+}
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="fatura.pdf"');
-    res.send(pdfBuffer);
+app.post('/convert', upload.array('zipFiles', 30), async (req, res) => {
+  const files = req.files || [];
+
+  if (files.length === 0) {
+    return res.status(400).json({ error: 'Lütfen en az bir ZIP dosyası yükleyin.' });
+  }
+
+  let browser;
+  try {
+    browser = await chromium.launch({ headless: true });
+
+    const outputZip = new AdmZip();
+    const usedNames = new Set();
+
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      let htmlContent;
+
+      try {
+        htmlContent = findFirstHtmlInZip(file.buffer);
+      } catch (error) {
+        return res.status(400).json({ error: `Geçersiz ZIP dosyası: ${file.originalname}` });
+      }
+
+      if (!htmlContent) {
+        return res.status(400).json({ error: `ZIP içinde HTML bulunamadı: ${file.originalname}` });
+      }
+
+      const pdfBuffer = await convertHtmlToPdfBuffer(browser, htmlContent);
+      const baseName = deriveInvoiceName(htmlContent, file.originalname, i) || `fatura-${i + 1}`;
+
+      let finalName = `${baseName}.pdf`;
+      let duplicateCounter = 2;
+      while (usedNames.has(finalName.toLowerCase())) {
+        finalName = `${baseName} (${duplicateCounter}).pdf`;
+        duplicateCounter += 1;
+      }
+      usedNames.add(finalName.toLowerCase());
+
+      outputZip.addFile(finalName, pdfBuffer);
+    }
+
+    const zipBuffer = outputZip.toBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="faturalar_pdf.zip"');
+    res.send(zipBuffer);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'PDF oluşturulurken bir hata oluştu.' });
+    res.status(500).json({ error: 'Dönüştürme sırasında bir hata oluştu.' });
   } finally {
     if (browser) {
       await browser.close();

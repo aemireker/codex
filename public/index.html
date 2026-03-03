@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZIP İçindeki HTML'i PDF'e Dönüştür</title>
+    <title>ZIP İçindeki Faturaları Toplu PDF'e Dönüştür</title>
     <style>
       :root {
         font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -19,7 +19,7 @@
       }
 
       .card {
-        width: min(560px, calc(100vw - 2rem));
+        width: min(640px, calc(100vw - 2rem));
         background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 16px;
@@ -33,6 +33,11 @@
       }
 
       p {
+        margin: 0 0 12px;
+        color: #4b5563;
+      }
+
+      ul {
         margin: 0 0 16px;
         color: #4b5563;
       }
@@ -80,14 +85,18 @@
   </head>
   <body>
     <main class="card">
-      <h1>ZIP → PDF (HTML Fatura)</h1>
+      <h1>Toplu ZIP → PDF Dönüşümü</h1>
       <p>
-        ZIP dosyanızı yükleyin. İçindeki ilk <strong>.html</strong> dosyası PDF'e çevrilip otomatik indirilecektir.
+        Aynı anda birden fazla ZIP (ör. 16 adet) yükleyin. Her ZIP içindeki ilk <strong>.html</strong> dosyası PDF'e çevrilir.
       </p>
+      <ul>
+        <li>Tüm PDF'ler tek bir <strong>faturalar_pdf.zip</strong> dosyası olarak indirilir.</li>
+        <li>PDF adı, öncelikle faturadaki <strong>title / h1 / bina-site adı</strong> metninden üretilir.</li>
+      </ul>
 
       <form id="uploadForm" class="input-row">
-        <input id="zipFile" type="file" name="zipFile" accept=".zip" required />
-        <button id="submitBtn" type="submit">PDF Olarak İndir</button>
+        <input id="zipFiles" type="file" name="zipFiles" accept=".zip" multiple required />
+        <button id="submitBtn" type="submit">Toplu PDF İndir</button>
       </form>
 
       <div id="status"></div>
@@ -101,20 +110,20 @@
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
 
-        const fileInput = document.getElementById('zipFile');
-        const file = fileInput.files[0];
+        const fileInput = document.getElementById('zipFiles');
+        const files = Array.from(fileInput.files || []);
 
-        if (!file) {
-          statusEl.textContent = 'Lütfen ZIP dosyası seçin.';
+        if (files.length === 0) {
+          statusEl.textContent = 'Lütfen en az bir ZIP dosyası seçin.';
           statusEl.className = 'error';
           return;
         }
 
         const formData = new FormData();
-        formData.append('zipFile', file);
+        files.forEach((file) => formData.append('zipFiles', file));
 
         submitBtn.disabled = true;
-        statusEl.textContent = 'Dönüştürülüyor...';
+        statusEl.textContent = `${files.length} dosya dönüştürülüyor...`;
         statusEl.className = '';
 
         try {
@@ -132,13 +141,13 @@
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = 'fatura.pdf';
+          link.download = 'faturalar_pdf.zip';
           document.body.appendChild(link);
           link.click();
           link.remove();
           window.URL.revokeObjectURL(url);
 
-          statusEl.textContent = 'PDF başarıyla indirildi.';
+          statusEl.textContent = 'PDF ZIP dosyası başarıyla indirildi.';
           statusEl.className = 'success';
         } catch (error) {
           statusEl.textContent = error.message;

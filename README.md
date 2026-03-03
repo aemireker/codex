@@ -1,6 +1,6 @@
-# ZIP içindeki HTML dosyasını PDF'e dönüştürme uygulaması
+# ZIP içindeki HTML faturaları toplu PDF'e dönüştürme uygulaması
 
-Bu uygulama, yüklenen ZIP dosyası içerisindeki ilk `.html`/`.htm` dosyasını bularak PDF çıktısı üretir ve indirir.
+Bu uygulama, birden fazla ZIP dosyası yüklemenize izin verir. Her ZIP içindeki ilk `.html`/`.htm` dosyası PDF'e çevrilir ve tüm PDF'ler tek bir ZIP dosyası olarak indirilir.
 
 ## Kurulum
 
@@ -19,11 +19,22 @@ Ardından tarayıcıdan `http://localhost:3000` adresini açın.
 
 ## Kullanım
 
-1. ZIP dosyanızı seçin.
-2. **PDF Olarak İndir** butonuna tıklayın.
-3. ZIP içindeki ilk HTML dosyası `fatura.pdf` olarak indirilecektir.
+1. Aynı anda bir veya birden fazla ZIP dosyası seçin (ör. 16 adet ZIP).
+2. **Toplu PDF İndir** butonuna tıklayın.
+3. Tüm dönüştürülen PDF'ler `faturalar_pdf.zip` olarak indirilecektir.
+
+## PDF dosya adı nasıl belirlenir?
+
+Her PDF adı şu önceliklerle belirlenir:
+
+1. HTML içindeki `<title>`
+2. HTML içindeki ilk `<h1>`
+3. Metin içinde geçen `site / sitesi / bina / binası` benzeri ifade
+4. Hiçbiri yoksa ZIP dosyasının adı
+
+Aynı isimli PDF'lerde otomatik olarak `(2)`, `(3)` gibi ekler kullanılır.
 
 ## Notlar
 
-- ZIP içinde HTML dosyası yoksa hata verir.
+- ZIP içinde HTML dosyası yoksa ilgili dosya adıyla hata döner.
 - Geçersiz ZIP dosyalarında dönüşüm yapılmaz.
