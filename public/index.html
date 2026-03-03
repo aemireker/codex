@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZIP İçindeki Faturaları Toplu PDF'e Dönüştür</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: #111827;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, #f9fafb 0%, #e5e7eb 100%);
+      }
+
+      .card {
+        width: min(640px, calc(100vw - 2rem));
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.4rem;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: #4b5563;
+      }
+
+      ul {
+        margin: 0 0 16px;
+        color: #4b5563;
+      }
+
+      .input-row {
+        display: grid;
+        gap: 12px;
+      }
+
+      input[type='file'] {
+        border: 1px dashed #9ca3af;
+        border-radius: 10px;
+        padding: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: white;
+        background: #2563eb;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 12px;
+        font-size: 0.9rem;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+
+      .success {
+        color: #065f46;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Toplu ZIP → PDF Dönüşümü</h1>
+      <p>
+        Aynı anda birden fazla ZIP (ör. 16 adet) yükleyin. Her ZIP içindeki ilk <strong>.html</strong> dosyası PDF'e çevrilir.
+      </p>
+      <ul>
+        <li>Tüm PDF'ler tek bir <strong>faturalar_pdf.zip</strong> dosyası olarak indirilir.</li>
+        <li>PDF adı, öncelikle faturadaki <strong>title / h1 / bina-site adı</strong> metninden üretilir.</li>
+      </ul>
+
+      <form id="uploadForm" class="input-row">
+        <input id="zipFiles" type="file" name="zipFiles" accept=".zip" multiple required />
+        <button id="submitBtn" type="submit">Toplu PDF İndir</button>
+      </form>
+
+      <div id="status"></div>
+    </main>
+
+    <script>
+      const form = document.getElementById('uploadForm');
+      const statusEl = document.getElementById('status');
+      const submitBtn = document.getElementById('submitBtn');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const fileInput = document.getElementById('zipFiles');
+        const files = Array.from(fileInput.files || []);
+
+        if (files.length === 0) {
+          statusEl.textContent = 'Lütfen en az bir ZIP dosyası seçin.';
+          statusEl.className = 'error';
+          return;
+        }
+
+        const formData = new FormData();
+        files.forEach((file) => formData.append('zipFiles', file));
+
+        submitBtn.disabled = true;
+        statusEl.textContent = `${files.length} dosya dönüştürülüyor...`;
+        statusEl.className = '';
+
+        try {
+          const response = await fetch('/convert', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || `Sunucu hatası (${response.status})`);
+          }
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'faturalar_pdf.zip';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+
+          statusEl.textContent = 'PDF ZIP dosyası başarıyla indirildi.';
+          statusEl.className = 'success';
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.className = 'error';
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
