@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZIP İçindeki HTML'i PDF'e Dönüştür</title>
+    <style>
+      :root {
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        color: #111827;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, #f9fafb 0%, #e5e7eb 100%);
+      }
+
+      .card {
+        width: min(560px, calc(100vw - 2rem));
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.4rem;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: #4b5563;
+      }
+
+      .input-row {
+        display: grid;
+        gap: 12px;
+      }
+
+      input[type='file'] {
+        border: 1px dashed #9ca3af;
+        border-radius: 10px;
+        padding: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: white;
+        background: #2563eb;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      #status {
+        margin-top: 12px;
+        font-size: 0.9rem;
+      }
+
+      .error {
+        color: #b91c1c;
+      }
+
+      .success {
+        color: #065f46;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>ZIP → PDF (HTML Fatura)</h1>
+      <p>
+        ZIP dosyanızı yükleyin. İçindeki ilk <strong>.html</strong> dosyası PDF'e çevrilip otomatik indirilecektir.
+      </p>
+
+      <form id="uploadForm" class="input-row">
+        <input id="zipFile" type="file" name="zipFile" accept=".zip" required />
+        <button id="submitBtn" type="submit">PDF Olarak İndir</button>
+      </form>
+
+      <div id="status"></div>
+    </main>
+
+    <script>
+      const form = document.getElementById('uploadForm');
+      const statusEl = document.getElementById('status');
+      const submitBtn = document.getElementById('submitBtn');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+
+        const fileInput = document.getElementById('zipFile');
+        const file = fileInput.files[0];
+
+        if (!file) {
+          statusEl.textContent = 'Lütfen ZIP dosyası seçin.';
+          statusEl.className = 'error';
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('zipFile', file);
+
+        submitBtn.disabled = true;
+        statusEl.textContent = 'Dönüştürülüyor...';
+        statusEl.className = '';
+
+        try {
+          const response = await fetch('/convert', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'Bilinmeyen hata oluştu.');
+          }
+
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'fatura.pdf';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+
+          statusEl.textContent = 'PDF başarıyla indirildi.';
+          statusEl.className = 'success';
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.className = 'error';
+        } finally {
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
