@@ -79,10 +79,24 @@ function deriveInvoiceName(htmlContent, originalFileName, index) {
   return sanitizeFileName(fileBase) || `fatura-${index + 1}`;
 }
 
-async function convertHtmlToPdfBuffer(browser, htmlContent) {
+function explainBrowserError(error) {
+  const message = (error && error.message) || '';
+
+  if (message.includes('Executable doesn\'t exist')) {
+    return 'Playwright tarayıcı bileşeni eksik. Sunucuda `npx playwright install chromium` çalıştırın.';
+  }
+
+  if (message.includes('No usable sandbox')) {
+    return 'Sunucu ortamında Chromium sandbox hatası oluştu. Uygulama artık no-sandbox ile açılıyor; sorun sürerse sistem yöneticinize danışın.';
+  }
+
+  return null;
+}
+
+async function convertHtmlToPdfBuffer(browser, htmlContent, sourceName) {
   const page = await browser.newPage();
   try {
-    await page.setContent(htmlContent, { waitUntil: 'networkidle' });
+    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     return await page.pdf({
       format: 'A4',
@@ -94,6 +108,8 @@ async function convertHtmlToPdfBuffer(browser, htmlContent) {
         left: '15mm'
       }
     });
+  } catch (error) {
+    throw new Error(`PDF üretimi başarısız (${sourceName}): ${error.message}`);
   } finally {
     await page.close();
   }
@@ -108,7 +124,10 @@ app.post('/convert', upload.array('zipFiles', 30), async (req, res) => {
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
     const outputZip = new AdmZip();
     const usedNames = new Set();
@@ -127,7 +146,7 @@ app.post('/convert', upload.array('zipFiles', 30), async (req, res) => {
         return res.status(400).json({ error: `ZIP içinde HTML bulunamadı: ${file.originalname}` });
       }
 
-      const pdfBuffer = await convertHtmlToPdfBuffer(browser, htmlContent);
+      const pdfBuffer = await convertHtmlToPdfBuffer(browser, htmlContent, file.originalname);
       const baseName = deriveInvoiceName(htmlContent, file.originalname, i) || `fatura-${i + 1}`;
 
       let finalName = `${baseName}.pdf`;
@@ -146,8 +165,15 @@ app.post('/convert', upload.array('zipFiles', 30), async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="faturalar_pdf.zip"');
     res.send(zipBuffer);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Dönüştürme sırasında bir hata oluştu.' });
+    console.error('convert_error:', error);
+    const browserHint = explainBrowserError(error);
+    if (browserHint) {
+      return res.status(500).json({ error: browserHint });
+    }
+
+    return res.status(500).json({
+      error: error.message || 'Dönüştürme sırasında bir hata oluştu.'
+    });
   } finally {
     if (browser) {
       await browser.close();

@@ -34,6 +34,15 @@ Her PDF adı şu önceliklerle belirlenir:
 
 Aynı isimli PDF'lerde otomatik olarak `(2)`, `(3)` gibi ekler kullanılır.
 
+## Hata çözümü
+
+- `Playwright tarayıcı bileşeni eksik` hatasında sunucuda şu komutu çalıştırın:
+  ```bash
+  npx playwright install chromium
+  ```
+- Sunucuda Chromium sandbox hatası olursa uygulama otomatik olarak `--no-sandbox` ile açılır.
+- Hata mesajları artık ilgili ZIP dosyası adını da içerecek şekilde döner.
+
 ## Notlar
 
 - ZIP içinde HTML dosyası yoksa ilgili dosya adıyla hata döner.

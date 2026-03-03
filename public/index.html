@@ -134,7 +134,7 @@
 
           if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            throw new Error(data.error || 'Bilinmeyen hata oluştu.');
+            throw new Error(data.error || `Sunucu hatası (${response.status})`);
           }
 
           const blob = await response.blob();
